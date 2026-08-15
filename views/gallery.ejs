@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= eventName %> — Galeri</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1><%= eventName %></h1>
+      <p><%= items.length %> anı paylaşıldı</p>
+    </header>
+
+    <p class="center" style="margin-bottom:18px;">
+      <a href="/" class="btn" style="display:inline-block; width:auto; padding:10px 22px;">+ Sen de paylaş</a>
+    </p>
+
+    <div class="gallery-grid">
+      <% items.forEach(function(item) { %>
+        <figure>
+          <% if (item.kind === 'video') { %>
+            <video src="<%= item.url %>" controls preload="metadata"></video>
+          <% } else { %>
+            <a href="<%= item.url %>" target="_blank" rel="noopener">
+              <img src="<%= item.thumbnail %>" loading="lazy" alt="" />
+            </a>
+          <% } %>
+          <% if (item.guest_name) { %>
+            <figcaption><%= item.guest_name %></figcaption>
+          <% } %>
+        </figure>
+      <% }); %>
+    </div>
+
+    <% if (items.length === 0) { %>
+      <p class="center muted" style="margin-top:40px;">Henüz paylaşım yok. İlk paylaşan sen ol!</p>
+    <% } %>
+  </div>
+</body>
+</html>

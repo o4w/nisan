@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= eventName %> — Admin</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>Admin Paneli</h1>
+      <p class="muted"><%= items.length %> dosya · <%= eventName %></p>
+    </header>
+
+    <div class="card center" style="margin-bottom:20px;">
+      <a class="btn" href="/admin/tumunu-indir">⬇ Tüm albümü ZIP olarak indir</a>
+      <a class="btn btn-secondary" href="/galeri" target="_blank" style="margin-top:10px;">Galeriyi aç</a>
+    </div>
+
+    <div class="card">
+      <% items.forEach(function(item) { %>
+        <div class="admin-row">
+          <% if (item.kind === 'video') { %>
+            <video src="<%= item.url %>" muted></video>
+          <% } else { %>
+            <img src="<%= item.thumbnail %>" alt="" />
+          <% } %>
+          <div class="meta">
+            <strong><%= item.guest_name || 'İsimsiz misafir' %></strong>
+            <span class="badge <%= item.approved ? '' : 'hidden' %>"><%= item.approved ? 'Görünür' : 'Gizli' %></span>
+            <br/>
+            <span class="muted"><%= item.message || '' %></span><br/>
+            <span class="muted"><%= item.created_at %></span>
+          </div>
+          <div>
+            <% if (item.approved) { %>
+              <form method="POST" action="/admin/gizle/<%= item.id %>">
+                <input type="hidden" name="resource_type" value="<%= item.kind %>" />
+                <button type="submit">Gizle</button>
+              </form>
+            <% } else { %>
+              <form method="POST" action="/admin/onayla/<%= item.id %>">
+                <input type="hidden" name="resource_type" value="<%= item.kind %>" />
+                <button type="submit">Onayla</button>
+              </form>
+            <% } %>
+            <form method="POST" action="/admin/sil/<%= item.id %>" onsubmit="return confirm('Bu dosyayı kalıcı olarak silmek istediğine emin misin?');">
+              <input type="hidden" name="resource_type" value="<%= item.kind %>" />
+              <button type="submit" style="background:#b5453a;">Sil</button>
+            </form>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+</body>
+</html>

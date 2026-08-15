@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= eventName %> — Anı Albümü</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1><%= eventName %></h1>
+    </header>
+
+    <div class="card center">
+      <% if (success) { %>
+        <div class="result-icon">🎉</div>
+        <h2 style="font-weight:400;">Teşekkürler!</h2>
+        <p class="muted">
+          <%= count %> dosya albüme eklendi.
+          <% if (moderated) { %>
+            Onaylandıktan sonra galeride görünecek.
+          <% } %>
+        </p>
+      <% } else { %>
+        <div class="result-icon">😕</div>
+        <h2 style="font-weight:400;">Bir sorun oluştu</h2>
+        <p class="muted"><%= error %></p>
+      <% } %>
+
+      <a class="btn" href="/">Başka dosya yükle</a>
+      <a class="btn btn-secondary" href="/galeri" style="margin-top:10px;">Galeriyi görüntüle</a>
+    </div>
+  </div>
+</body>
+</html>

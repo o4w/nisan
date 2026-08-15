@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+  <title><%= eventName %> — Anı Albümü</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1><%= eventName %></h1>
+      <p>Çektiğin fotoğraf ve videoları bizimle paylaş 💛</p>
+    </header>
+
+    <div class="card">
+      <form action="/upload" method="POST" enctype="multipart/form-data" id="uploadForm">
+        <label for="guest_name">Adın (opsiyonel)</label>
+        <input type="text" id="guest_name" name="guest_name" placeholder="Örn. Ayşe Yılmaz" maxlength="80" />
+
+        <label for="message">Kısa bir not bırak (opsiyonel)</label>
+        <textarea id="message" name="message" placeholder="Sizi çok seviyoruz!" maxlength="300"></textarea>
+
+        <label class="file-drop" id="dropLabel">
+          <span class="big">📷 Fotoğraf / Video Seç</span>
+          <span class="muted">Aynı anda en fazla <%= maxFiles %> dosya, dosya başına <%= maxSize %>MB'a kadar</span>
+          <input type="file" name="photos" id="fileInput" accept="image/*,video/*" multiple capture="environment" required />
+        </label>
+
+        <div id="preview"></div>
+
+        <button type="submit" id="submitBtn">Yükle</button>
+      </form>
+    </div>
+
+    <p class="center muted" style="margin-top:18px;">
+      <a href="/galeri" class="muted">Şimdiye kadar paylaşılanları gör →</a>
+    </p>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('preview');
+    const form = document.getElementById('uploadForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    fileInput.addEventListener('change', () => {
+      preview.innerHTML = '';
+      [...fileInput.files].forEach((file) => {
+        const url = URL.createObjectURL(file);
+        const el = file.type.startsWith('video/')
+          ? Object.assign(document.createElement('video'), { src: url, muted: true })
+          : Object.assign(document.createElement('img'), { src: url });
+        preview.appendChild(el);
+      });
+    });
+
+    form.addEventListener('submit', () => {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Yükleniyor...';
+    });
+  </script>
+</body>
+</html>

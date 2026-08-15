@@ -1,0 +1,26 @@
+{
+  "name": "qr-ani-albumu",
+  "version": "1.0.0",
+  "description": "QR kodlu dijital anı albümü - düğün/etkinlik misafirlerinin fotoğraf ve video yükleyip ortak bir galeride toplayabildiği basit self-hosted uygulama.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "qr": "node scripts/generate-qr.js",
+    "cards": "node scripts/generate-table-cards.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.658.1",
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.21.1",
+    "express-basic-auth": "^1.2.1",
+    "multer": "^2.0.1",
+    "pdfkit": "^0.15.0",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.3"
+  }
+}
