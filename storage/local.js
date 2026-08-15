@@ -19,25 +19,40 @@ function kindFromMime(mime) {
 
 // iPhone'lar fotoğrafları varsayılan olarak HEIC/HEIF formatında üretir. Bu format web
 // tarayıcılarının büyük çoğunluğunda <img> etiketiyle GÖSTERİLEMEZ - galeride "kırık
-// resim" olarak görünür. Diske zaten yazılmış HEIC dosyasını JPEG'e çevirip yerine koyuyoruz.
+// resim" olarak görünür. Sunucudaki sharp/libvips kurulumu da bu formatın piksel verisini
+// çözemiyor (codec eksik). Dosyanın mimetype/uzantı bilgisine GÜVENMİYORUZ (mobil
+// tarayıcılar bunu her zaman doğru bildirmeyebiliyor) - doğrudan sharp ile işlemeyi
+// DENEYİP başarısız olursa HEIC/HEIF kabul edip heic-convert ile JPEG'e çeviriyoruz.
 async function normalizeHeicIfNeeded(file) {
-  const mt = (file.mimetype || '').toLowerCase();
-  const isHeic = mt === 'image/heic' || mt === 'image/heif' || /\.(heic|heif)$/i.test(file.filename || '');
-  if (!isHeic) return file.filename;
-
   const srcPath = path.join(UPLOAD_DIR, file.filename);
   try {
-    const inputBuffer = fs.readFileSync(srcPath);
-    const jpegBuffer = await heicConvert({ buffer: inputBuffer, format: 'JPEG', quality: 0.9 });
-    const newFilename = file.filename.replace(/\.[^.]+$/, '') + '.jpg';
-    fs.writeFileSync(path.join(UPLOAD_DIR, newFilename), jpegBuffer);
-    fs.unlinkSync(srcPath);
-    file.mimetype = 'image/jpeg';
-    return newFilename;
-  } catch (e) {
-    // Dönüştürme başarısız olursa orijinal HEIC dosyası olduğu gibi kalır.
-    console.error('HEIC donusturulemedi, orijinal dosya kullanilacak:', e.message);
+    // Sharp bu dosyayı gerçekten işleyebiliyor mu diye test ediyoruz (thumbnail'i
+    // makeThumbnail zaten üretecek, burada sadece decode edilebilirliği kontrol ediyoruz).
+    await sharp(srcPath).rotate().toBuffer();
     return file.filename;
+  } catch (sharpErr) {
+    try {
+      const inputBuffer = fs.readFileSync(srcPath);
+      const jpegBuffer = await heicConvert({ buffer: inputBuffer, format: 'JPEG', quality: 0.9 });
+      const newFilename = file.filename.replace(/\.[^.]+$/, '') + '.jpg';
+      const newPath = path.join(UPLOAD_DIR, newFilename);
+      // Dosya adı zaten ".jpg" ile bitiyor olabilir (mimetype/uzantı yanlış bildirilmiş
+      // olsa bile içerik gerçekte HEIC'ti) - bu durumda newPath === srcPath olur. Önce
+      // yazıp sonra "eskiyi" silersek az önce yazdığımız yeni dosyayı silmiş oluruz. Bu
+      // yüzden yol aynıysa doğrudan üzerine yazıyoruz, farklıysa yaz+eskisini sil yapıyoruz.
+      if (newPath === srcPath) {
+        fs.writeFileSync(srcPath, jpegBuffer);
+      } else {
+        fs.writeFileSync(newPath, jpegBuffer);
+        fs.unlinkSync(srcPath);
+      }
+      file.mimetype = 'image/jpeg';
+      return newFilename;
+    } catch (heicErr) {
+      // Dönüştürme başarısız olursa orijinal dosya olduğu gibi kalır.
+      console.error('Gorsel islenemedi (sharp ve heic-convert basarisiz):', sharpErr.message, '|', heicErr.message);
+      return file.filename;
+    }
   }
 }
 
