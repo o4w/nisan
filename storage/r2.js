@@ -57,19 +57,33 @@ async function ensureSchema() {
       guest_name TEXT,
       message TEXT,
       approved INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      has_thumbnail INTEGER NOT NULL DEFAULT 0
     );
   `);
+  // Bu kolon daha önce oluşturulmuş (has_thumbnail'sız) bir tabloya sonradan ekleniyor olabilir.
+  // Kolon zaten varsa D1 hata döner, bunu sessizce yoksayıyoruz.
+  try {
+    await d1Query(`ALTER TABLE media ADD COLUMN has_thumbnail INTEGER NOT NULL DEFAULT 0`);
+  } catch (e) {
+    // kolon zaten var - sorun değil
+  }
   schemaReady = true;
 }
 
 function toRecord(row) {
   const key = row.id;
   const isVideo = row.kind === 'video';
+  // Thumbnail sadece gerçekten oluşturulup R2'ye yüklendiyse thumb-*.webp'e işaret eder;
+  // aksi halde (video ya da thumbnail üretimi başarısız olduysa) doğrudan orijinal dosyaya
+  // düşer, böylece galeri hiçbir zaman "kırık resim" göstermez.
+  const hasThumbnail = !isVideo && Number(row.has_thumbnail) === 1;
   return {
     id: key,
     url: `${PUBLIC_URL}/${encodeURIComponent(key)}`,
-    thumbnail: isVideo ? `${PUBLIC_URL}/${encodeURIComponent(key)}` : `${PUBLIC_URL}/${encodeURIComponent('thumb-' + key + '.webp')}`,
+    thumbnail: hasThumbnail
+      ? `${PUBLIC_URL}/${encodeURIComponent('thumb-' + key + '.webp')}`
+      : `${PUBLIC_URL}/${encodeURIComponent(key)}`,
     kind: row.kind,
     original_name: row.original_name,
     guest_name: row.guest_name,
@@ -91,19 +105,23 @@ async function saveUpload(file, meta) {
 
   await putObject(key, file.buffer, file.mimetype);
 
+  let hasThumbnail = false;
   if (kind === 'image') {
     try {
       const thumbBuf = await sharp(file.buffer).rotate().resize(500, 500, { fit: 'cover' }).webp({ quality: 78 }).toBuffer();
       await putObject(`thumb-${key}.webp`, thumbBuf, 'image/webp');
+      hasThumbnail = true;
     } catch (e) {
-      console.error('Thumbnail olusturulamadi:', e.message);
+      // Thumbnail üretilemedi (ör. bellek kısıtı, desteklenmeyen format) - sorun değil,
+      // galeri orijinal görseli gösterecek. Sadece logluyoruz.
+      console.error('Thumbnail olusturulamadi, orijinal gorsel kullanilacak:', e.message);
     }
   }
 
   const createdAt = new Date().toISOString();
   await d1Query(
-    `INSERT INTO media (id, kind, original_name, guest_name, message, approved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [key, kind, file.originalname || null, meta.guestName || null, meta.message || null, meta.approved ? 1 : 0, createdAt]
+    `INSERT INTO media (id, kind, original_name, guest_name, message, approved, created_at, has_thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [key, kind, file.originalname || null, meta.guestName || null, meta.message || null, meta.approved ? 1 : 0, createdAt, hasThumbnail ? 1 : 0]
   );
 
   return toRecord({
@@ -114,6 +132,7 @@ async function saveUpload(file, meta) {
     message: meta.message,
     approved: meta.approved ? 1 : 0,
     created_at: createdAt,
+    has_thumbnail: hasThumbnail ? 1 : 0,
   });
 }
 
