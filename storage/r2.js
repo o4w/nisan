@@ -98,32 +98,15 @@ async function putObject(key, buffer, contentType) {
   await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: buffer, ContentType: contentType }));
 }
 
-// iPhone'lar fotoğrafları varsayılan olarak HEIC/HEIF formatında üretir. Bu format
-// web tarayıcılarının büyük çoğunluğunda (Android/Chrome, çoğu masaüstü tarayıcı, hatta
-// bazı Safari sürümlerinde) <img> etiketiyle GÖSTERİLEMEZ - dosya galeriye "kırık resim"
-// olarak düşer. Bu yüzden HEIC/HEIF olarak gelen her görseli, misafirin galeride her
-// cihazda sorunsuz görebilmesi için sunucu tarafında JPEG'e çeviriyoruz.
-function isHeic(file) {
-  const mt = (file.mimetype || '').toLowerCase();
-  if (mt === 'image/heic' || mt === 'image/heif') return true;
-  return /\.(heic|heif)$/i.test(file.originalname || '');
-}
-
-async function normalizeImage(file) {
-  if (!isHeic(file)) {
-    const ext = (file.originalname.match(/\.[^.]+$/) || [''])[0].toLowerCase();
-    return { buffer: file.buffer, mimetype: file.mimetype, ext: ext || '.jpg' };
-  }
-  try {
-    const jpegBuffer = await heicConvert({ buffer: file.buffer, format: 'JPEG', quality: 0.9 });
-    return { buffer: jpegBuffer, mimetype: 'image/jpeg', ext: '.jpg' };
-  } catch (e) {
-    // Dönüştürme başarısız olursa (bozuk dosya vb.) orijinal HEIC'i olduğu gibi
-    // yüklemeye devam ediyoruz; en azından "İndir" ile erişilebilir kalır.
-    console.error('HEIC donusturulemedi, orijinal dosya kullanilacak:', e.message);
-    const ext = (file.originalname.match(/\.[^.]+$/) || [''])[0].toLowerCase();
-    return { buffer: file.buffer, mimetype: file.mimetype, ext: ext || '.heic' };
-  }
+// iPhone'lar fotoğrafları varsayılan olarak HEIC/HEIF formatında üretir. Bu format web
+// tarayıcılarının büyük çoğunluğunda <img> etiketiyle GÖSTERİLEMEZ. Sunucudaki sharp/libvips
+// kurulumu da bu formatın piksel verisini çözemiyor (codec eksik) - dosyanın mimetype/uzantı
+// bilgisine GÜVENMİYORUZ (mobil tarayıcılar bunu her zaman doğru bildirmeyebiliyor); bunun
+// yerine doğrudan sharp ile işlemeyi DENEYİP başarısız olursa HEIC/HEIF kabul edip
+// heic-convert ile JPEG'e çeviriyoruz. Bu, dosyanın gerçekten tarayıcıda açılıp açılamayacağını
+// test etmenin en güvenilir yolu.
+async function makeThumbBuffer(buffer) {
+  return sharp(buffer).rotate().resize(500, 500, { fit: 'cover' }).webp({ quality: 78 }).toBuffer();
 }
 
 async function saveUpload(file, meta) {
@@ -132,13 +115,35 @@ async function saveUpload(file, meta) {
 
   let uploadBuffer = file.buffer;
   let uploadMime = file.mimetype;
-  let ext = (file.originalname.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+  let ext = (file.originalname.match(/\.[^.]+$/) || [''])[0].toLowerCase() || '.jpg';
+  let thumbBuf = null;
 
   if (kind === 'image') {
-    const normalized = await normalizeImage(file);
-    uploadBuffer = normalized.buffer;
-    uploadMime = normalized.mimetype;
-    ext = normalized.ext;
+    try {
+      // Önce doğrudan orijinal dosyadan thumbnail üretmeyi dene - bu aynı zamanda
+      // sharp'ın bu formatı gerçekten (sadece metadata değil, piksel düzeyinde)
+      // işleyebildiğinin de testidir.
+      thumbBuf = await makeThumbBuffer(uploadBuffer);
+    } catch (sharpErr) {
+      // Sharp bu formatı işleyemedi - büyük ihtimalle HEIC/HEIF (iPhone fotoğrafı).
+      // heic-convert ile JPEG'e çevirip tekrar deniyoruz.
+      try {
+        uploadBuffer = await heicConvert({ buffer: file.buffer, format: 'JPEG', quality: 0.9 });
+        uploadMime = 'image/jpeg';
+        ext = '.jpg';
+        thumbBuf = await makeThumbBuffer(uploadBuffer);
+      } catch (heicErr) {
+        // İkisi de başarısız oldu (bozuk dosya, bilinmeyen format vb.) - orijinal dosyayı
+        // olduğu gibi yüklemeye devam ediyoruz, en azından kayıp olmasın. Galeri bu durumda
+        // thumbnail yerine orijinali göstermeyi dener (yine de tarayıcıda açılmayabilir).
+        console.error(
+          'Gorsel islenemedi (sharp ve heic-convert basarisiz), orijinal dosya oldugu gibi yuklenecek:',
+          sharpErr.message,
+          '|',
+          heicErr.message
+        );
+      }
+    }
   }
 
   const key = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
@@ -146,15 +151,14 @@ async function saveUpload(file, meta) {
   await putObject(key, uploadBuffer, uploadMime);
 
   let hasThumbnail = false;
-  if (kind === 'image') {
+  if (thumbBuf) {
     try {
-      const thumbBuf = await sharp(uploadBuffer).rotate().resize(500, 500, { fit: 'cover' }).webp({ quality: 78 }).toBuffer();
       await putObject(`thumb-${key}.webp`, thumbBuf, 'image/webp');
       hasThumbnail = true;
     } catch (e) {
-      // Thumbnail üretilemedi (ör. bellek kısıtı, desteklenmeyen format) - sorun değil,
+      // Thumbnail üretildi ama R2'ye yüklenemedi (ör. geçici ağ sorunu) - sorun değil,
       // galeri orijinal görseli gösterecek. Sadece logluyoruz.
-      console.error('Thumbnail olusturulamadi, orijinal gorsel kullanilacak:', e.message);
+      console.error('Thumbnail R2ye yuklenemedi, orijinal gorsel kullanilacak:', e.message);
     }
   }
 
