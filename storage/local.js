@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
 const archiver = require('archiver');
+const heicConvert = require('heic-convert');
 const db = require('../db');
 
 const ROOT = path.join(__dirname, '..');
@@ -14,6 +15,30 @@ fs.mkdirSync(THUMB_DIR, { recursive: true });
 
 function kindFromMime(mime) {
   return mime.startsWith('video/') ? 'video' : 'image';
+}
+
+// iPhone'lar fotoğrafları varsayılan olarak HEIC/HEIF formatında üretir. Bu format web
+// tarayıcılarının büyük çoğunluğunda <img> etiketiyle GÖSTERİLEMEZ - galeride "kırık
+// resim" olarak görünür. Diske zaten yazılmış HEIC dosyasını JPEG'e çevirip yerine koyuyoruz.
+async function normalizeHeicIfNeeded(file) {
+  const mt = (file.mimetype || '').toLowerCase();
+  const isHeic = mt === 'image/heic' || mt === 'image/heif' || /\.(heic|heif)$/i.test(file.filename || '');
+  if (!isHeic) return file.filename;
+
+  const srcPath = path.join(UPLOAD_DIR, file.filename);
+  try {
+    const inputBuffer = fs.readFileSync(srcPath);
+    const jpegBuffer = await heicConvert({ buffer: inputBuffer, format: 'JPEG', quality: 0.9 });
+    const newFilename = file.filename.replace(/\.[^.]+$/, '') + '.jpg';
+    fs.writeFileSync(path.join(UPLOAD_DIR, newFilename), jpegBuffer);
+    fs.unlinkSync(srcPath);
+    file.mimetype = 'image/jpeg';
+    return newFilename;
+  } catch (e) {
+    // Dönüştürme başarısız olursa orijinal HEIC dosyası olduğu gibi kalır.
+    console.error('HEIC donusturulemedi, orijinal dosya kullanilacak:', e.message);
+    return file.filename;
+  }
 }
 
 async function makeThumbnail(filename) {
@@ -50,14 +75,15 @@ function multerDestination() {
 async function saveUpload(file, meta) {
   // file: multer diskStorage çıktısı -> file.filename diskte zaten yazılmış dosyanın adı
   const kind = kindFromMime(file.mimetype);
-  const thumbnail = kind === 'image' ? await makeThumbnail(file.filename) : null;
+  const filename = kind === 'image' ? await normalizeHeicIfNeeded(file) : file.filename;
+  const thumbnail = kind === 'image' ? await makeThumbnail(filename) : null;
 
   const insert = db.prepare(`
     INSERT INTO media (filename, thumbnail, original_name, mime_type, kind, guest_name, message, approved)
     VALUES (@filename, @thumbnail, @original_name, @mime_type, @kind, @guest_name, @message, @approved)
   `);
   const info = insert.run({
-    filename: file.filename,
+    filename,
     thumbnail,
     original_name: file.originalname,
     mime_type: file.mimetype,
