@@ -134,7 +134,6 @@ async function saveUpload(file, meta) {
   let uploadMime = file.mimetype;
   let ext = (file.originalname.match(/\.[^.]+$/) || [''])[0].toLowerCase();
 
-  let hasThumbnail = false;
   if (kind === 'image') {
     const normalized = await normalizeImage(file);
     uploadBuffer = normalized.buffer;
