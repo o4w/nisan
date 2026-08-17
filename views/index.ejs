@@ -29,6 +29,11 @@
 
         <div id="preview"></div>
 
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="progress-label" id="progressLabel">Yükleniyor... %0</div>
+        </div>
+
         <button type="submit" id="submitBtn">Yükle</button>
       </form>
     </div>
@@ -43,6 +48,10 @@
     const preview = document.getElementById('preview');
     const form = document.getElementById('uploadForm');
     const submitBtn = document.getElementById('submitBtn');
+    const dropLabel = document.getElementById('dropLabel');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressFill = document.getElementById('progressFill');
+    const progressLabel = document.getElementById('progressLabel');
 
     fileInput.addEventListener('change', () => {
       preview.innerHTML = '';
@@ -55,9 +64,56 @@
       });
     });
 
-    form.addEventListener('submit', () => {
+    // Dosyaları sürükleyip bırakma için görsel geri bildirim + gerçek atama
+    ['dragenter', 'dragover'].forEach((evt) => {
+      dropLabel.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropLabel.classList.add('drag-over');
+      });
+    });
+    ['dragleave', 'drop'].forEach((evt) => {
+      dropLabel.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropLabel.classList.remove('drag-over');
+      });
+    });
+    dropLabel.addEventListener('drop', (e) => {
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        fileInput.dispatchEvent(new Event('change'));
+      }
+    });
+
+    // Gerçek yükleme yüzdesini göstermek için form'u XHR ile gönderiyoruz
+    // (native form submit'te tarayıcı ilerleme bilgisi vermiyor).
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
       submitBtn.disabled = true;
       submitBtn.textContent = 'Yükleniyor...';
+      progressWrap.classList.add('show');
+      progressFill.style.width = '0%';
+      progressLabel.textContent = 'Yükleniyor... %0';
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload');
+      xhr.upload.addEventListener('progress', (ev) => {
+        if (ev.lengthComputable) {
+          const pct = Math.round((ev.loaded / ev.total) * 100);
+          progressFill.style.width = pct + '%';
+          progressLabel.textContent = pct < 100 ? `Yükleniyor... %${pct}` : 'İşleniyor...';
+        }
+      });
+      xhr.onload = () => {
+        document.open();
+        document.write(xhr.responseText);
+        document.close();
+      };
+      xhr.onerror = () => {
+        progressLabel.textContent = 'Bağlantı hatası oluştu, lütfen tekrar dene.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Yükle';
+      };
+      xhr.send(new FormData(form));
     });
   </script>
 </body>
