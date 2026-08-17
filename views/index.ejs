@@ -53,9 +53,25 @@
     const progressFill = document.getElementById('progressFill');
     const progressLabel = document.getElementById('progressLabel');
 
+    // iPhone fotoğrafları genelde HEIC formatında gelir; tarayıcı bunu doğrudan
+    // gösteremez, o yüzden önizlemede kırık resim yerine küçük bir simge gösteriyoruz.
+    // Gerçek dönüştürme, sunucuya göndermeden hemen önce (submit sırasında) yapılıyor.
+    function isHeicFile(file) {
+      const type = (file.type || '').toLowerCase();
+      if (type === 'image/heic' || type === 'image/heif') return true;
+      return /\.(heic|heif)$/i.test(file.name || '');
+    }
+
     fileInput.addEventListener('change', () => {
       preview.innerHTML = '';
       [...fileInput.files].forEach((file) => {
+        if (isHeicFile(file)) {
+          const ph = document.createElement('div');
+          ph.className = 'preview-heic';
+          ph.textContent = '📷 HEIC';
+          preview.appendChild(ph);
+          return;
+        }
         const url = URL.createObjectURL(file);
         const el = file.type.startsWith('video/')
           ? Object.assign(document.createElement('video'), { src: url, muted: true })
@@ -63,6 +79,58 @@
         preview.appendChild(el);
       });
     });
+
+    // heic2any kütüphanesini sadece gerçekten HEIC dosyası varsa (talep üzerine)
+    // yüklüyoruz - böylece normal jpg/png yükleyen misafirler gereksiz yere
+    // 1.3MB'lık bir kütüphane indirmiyor.
+    let heic2anyPromise = null;
+    function loadHeic2Any() {
+      if (window.heic2any) return Promise.resolve(window.heic2any);
+      if (heic2anyPromise) return heic2anyPromise;
+      heic2anyPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = '/vendor/heic2any.min.js';
+        script.onload = () => resolve(window.heic2any);
+        script.onerror = () => reject(new Error('heic2any yuklenemedi'));
+        document.head.appendChild(script);
+      });
+      return heic2anyPromise;
+    }
+
+    // HEIC dosyalarını yüklemeden ÖNCE, telefonun kendi gücüyle (sunucu değil)
+    // JPEG'e çeviriyoruz. Böylece kısıtlı kaynaklı sunucunun bu ağır işlemi
+    // yapmasına hiç gerek kalmıyor - "bazen kırık resim" sorununun asıl kaynağı
+    // buydu (büyük HEIC fotoğrafların dönüştürülmesi sunucunun belleğini zorluyordu).
+    async function prepareFilesForUpload(files, setStatus) {
+      if (!files.some(isHeicFile)) return files;
+
+      setStatus('HEIC fotoğraf(lar) dönüştürülüyor...');
+      let heic2any;
+      try {
+        heic2any = await loadHeic2Any();
+      } catch (e) {
+        console.error('heic2any yuklenemedi, dosyalar oldugu gibi gonderilecek:', e);
+        return files; // sunucudaki yedek mekanizma devreye girer
+      }
+
+      const prepared = [];
+      for (const file of files) {
+        if (!isHeicFile(file)) {
+          prepared.push(file);
+          continue;
+        }
+        try {
+          const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+          const blob = Array.isArray(result) ? result[0] : result;
+          const newName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+          prepared.push(new File([blob], newName, { type: 'image/jpeg' }));
+        } catch (e) {
+          console.error('HEIC donusturme basarisiz, orijinal dosya gonderilecek:', e);
+          prepared.push(file);
+        }
+      }
+      return prepared;
+    }
 
     // Dosyaları sürükleyip bırakma için görsel geri bildirim + gerçek atama
     ['dragenter', 'dragover'].forEach((evt) => {
@@ -86,11 +154,30 @@
 
     // Gerçek yükleme yüzdesini göstermek için form'u XHR ile gönderiyoruz
     // (native form submit'te tarayıcı ilerleme bilgisi vermiyor).
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Yükleniyor...';
+      submitBtn.textContent = 'Hazırlanıyor...';
       progressWrap.classList.add('show');
+      progressFill.classList.add('indeterminate');
+      progressLabel.textContent = 'Hazırlanıyor...';
+
+      let filesToSend;
+      try {
+        filesToSend = await prepareFilesForUpload([...fileInput.files], (msg) => {
+          progressLabel.textContent = msg;
+        });
+      } catch (err) {
+        filesToSend = [...fileInput.files];
+      }
+
+      const formData = new FormData();
+      formData.append('guest_name', form.guest_name.value);
+      formData.append('message', form.message.value);
+      filesToSend.forEach((file) => formData.append('photos', file));
+
+      submitBtn.textContent = 'Yükleniyor...';
+      progressFill.classList.remove('indeterminate');
       progressFill.style.width = '0%';
       progressLabel.textContent = 'Yükleniyor... %0';
 
@@ -113,7 +200,7 @@
         submitBtn.disabled = false;
         submitBtn.textContent = 'Yükle';
       };
-      xhr.send(new FormData(form));
+      xhr.send(formData);
     });
   </script>
 </body>
