@@ -4,18 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title><%= eventName %> — Anı Albümü</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="wrap">
-    <header class="hero">
-      <h1><%= eventName %></h1>
-    </header>
+    <%- include('partials/hero', { eventName, eventDate: typeof eventDate !== 'undefined' ? eventDate : null }) %>
 
     <div class="card center">
       <% if (success) { %>
         <div class="result-icon">🎉</div>
-        <h2 style="font-weight:400;">Teşekkürler!</h2>
+        <h2>Teşekkürler!</h2>
         <p class="muted">
           <%= count %> dosya albüme eklendi.
           <% if (moderated) { %>
@@ -24,7 +25,7 @@
         </p>
       <% } else { %>
         <div class="result-icon">😕</div>
-        <h2 style="font-weight:400;">Bir sorun oluştu</h2>
+        <h2>Bir sorun oluştu</h2>
         <p class="muted"><%= error %></p>
       <% } %>
 
