@@ -20,4 +20,8 @@ db.exec(`
   );
 `);
 
+// Galeri ve admin sayfaları "approved" durumuna göre filtreleyip created_at'e göre
+// sıralıyor - bu index olmadan SQLite kayıt sayısı arttıkça her istekte tüm tabloyu tarar.
+db.exec(`CREATE INDEX IF NOT EXISTS idx_media_approved_created ON media (approved, created_at DESC);`);
+
 module.exports = db;
