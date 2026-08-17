@@ -11,15 +11,20 @@
 </head>
 <body>
   <div class="wrap">
-    <%- include('partials/hero', { eventName, eventDate, heroSubtitle: items.length + ' anı paylaşıldı' }) %>
+    <%- include('partials/hero', { eventName, eventDate }) %>
+
+    <p class="center live-indicator" id="galleryMeta" style="margin-bottom:14px;">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span id="itemCount"><%= items.length %></span> anı paylaşıldı
+    </p>
 
     <p class="center" style="margin-bottom:18px;">
       <a href="/" class="btn" style="display:inline-block; width:auto; padding:10px 22px;">+ Sen de paylaş</a>
     </p>
 
-    <div class="gallery-grid">
-      <% items.forEach(function(item) { %>
-        <figure>
+    <div class="gallery-grid" id="galleryGrid">
+      <% items.forEach(function(item, i) { %>
+        <figure data-id="<%= item.id %>" style="--i: <%= i %>">
           <% if (item.kind === 'video') { %>
             <video src="<%= item.url %>" controls preload="metadata"></video>
           <% } else { %>
@@ -34,9 +39,100 @@
       <% }); %>
     </div>
 
-    <% if (items.length === 0) { %>
-      <p class="center muted" style="margin-top:40px;">Henüz paylaşım yok. İlk paylaşan sen ol!</p>
-    <% } %>
+    <p class="center muted" id="emptyMsg" style="margin-top:40px; <%= items.length ? 'display:none;' : '' %>">Henüz paylaşım yok. İlk paylaşan sen ol!</p>
   </div>
+
+  <div class="new-toast" id="newToast">Yeni anılar eklendi ↑</div>
+
+  <script>
+    (function () {
+      var grid = document.getElementById('galleryGrid');
+      var emptyMsg = document.getElementById('emptyMsg');
+      var countEl = document.getElementById('itemCount');
+      var toast = document.getElementById('newToast');
+      var known = new Set(Array.prototype.map.call(grid.querySelectorAll('figure'), function (f) { return f.dataset.id; }));
+      var toastTimer = null;
+
+      function wireImage(img) {
+        if (img.complete && img.naturalWidth > 0) {
+          img.classList.add('is-loaded');
+        } else {
+          img.addEventListener('load', function () { img.classList.add('is-loaded'); }, { once: true });
+          img.addEventListener('error', function () { img.classList.add('is-loaded'); }, { once: true });
+        }
+      }
+      Array.prototype.forEach.call(grid.querySelectorAll('img'), wireImage);
+
+      function buildFigure(item, isNew) {
+        var figure = document.createElement('figure');
+        figure.dataset.id = item.id;
+        if (isNew) figure.classList.add('is-new');
+
+        if (item.kind === 'video') {
+          var video = document.createElement('video');
+          video.src = item.url;
+          video.controls = true;
+          video.preload = 'metadata';
+          figure.appendChild(video);
+        } else {
+          var a = document.createElement('a');
+          a.href = item.url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          var img = document.createElement('img');
+          img.src = item.thumbnail;
+          img.loading = 'lazy';
+          img.alt = '';
+          wireImage(img);
+          a.appendChild(img);
+          figure.appendChild(a);
+        }
+
+        if (item.guest_name) {
+          var cap = document.createElement('figcaption');
+          cap.textContent = item.guest_name;
+          figure.appendChild(cap);
+        }
+        return figure;
+      }
+
+      function showToast(n) {
+        toast.textContent = n === 1 ? 'Yeni bir anı eklendi ↑' : n + ' yeni anı eklendi ↑';
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 3500);
+      }
+      toast.addEventListener('click', function () {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        toast.classList.remove('show');
+      });
+
+      function poll() {
+        if (document.hidden) return;
+        fetch('/api/galeri', { headers: { Accept: 'application/json' } })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) {
+            if (!data) return;
+            var items = data.items || [];
+            var freshItems = items.filter(function (it) { return !known.has(it.id); });
+            if (freshItems.length > 0) {
+              emptyMsg.style.display = 'none';
+              // Sunucu en yeniyi en başta döndürüyor (created_at DESC) - ters sırada
+              // ekleyerek en yeninin galerinin en üstünde kalmasını sağlıyoruz.
+              freshItems.slice().reverse().forEach(function (item) {
+                var figure = buildFigure(item, true);
+                grid.insertBefore(figure, grid.firstChild);
+                known.add(item.id);
+              });
+              countEl.textContent = items.length;
+              showToast(freshItems.length);
+            }
+          })
+          .catch(function () { /* sessizce yoksay, bir sonraki denemede tekrar dener */ });
+      }
+
+      setInterval(poll, 12000);
+    })();
+  </script>
 </body>
 </html>
