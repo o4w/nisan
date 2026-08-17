@@ -69,6 +69,15 @@ async function ensureSchema() {
   } catch (e) {
     // kolon zaten var - sorun değil
   }
+  // Galeri (herkese açık) ve admin sayfaları her zaman "approved" durumuna göre filtreleyip
+  // created_at'e göre sıralıyor - bu index olmadan D1 her istekte tüm tabloyu tarıyor.
+  // Kayıt sayısı arttıkça (özellikle büyük düğünlerde yüzlerce paylaşımla) bu sorguları
+  // gözle görülür şekilde hızlandırır.
+  try {
+    await d1Query(`CREATE INDEX IF NOT EXISTS idx_media_approved_created ON media (approved, created_at DESC)`);
+  } catch (e) {
+    console.error('D1 index olusturulamadi (onemli degil, sadece performansi etkiler):', e.message);
+  }
   schemaReady = true;
 }
 
