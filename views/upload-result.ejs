@@ -33,5 +33,26 @@
       <a class="btn btn-secondary" href="/galeri" style="margin-top:10px;">Galeriyi görüntüle</a>
     </div>
   </div>
+
+  <% if (success) { %>
+    <script>
+      (function () {
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        var emojis = ['🎉', '💛', '✨', '🤍', '🎊'];
+        var count = 26;
+        for (var i = 0; i < count; i++) {
+          var piece = document.createElement('span');
+          piece.className = 'confetti-piece';
+          piece.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+          piece.style.left = Math.random() * 100 + 'vw';
+          piece.style.animationDuration = (2.2 + Math.random() * 1.6) + 's';
+          piece.style.animationDelay = (Math.random() * 0.7) + 's';
+          piece.style.fontSize = (1 + Math.random() * 0.9) + 'rem';
+          document.body.appendChild(piece);
+          piece.addEventListener('animationend', function () { this.remove(); });
+        }
+      })();
+    </script>
+  <% } %>
 </body>
 </html>
