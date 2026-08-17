@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title><%= eventName %> — Galeri</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="wrap">
-    <header class="hero">
-      <h1><%= eventName %></h1>
-      <p><%= items.length %> anı paylaşıldı</p>
-    </header>
+    <%- include('partials/hero', { eventName, eventDate, heroSubtitle: items.length + ' anı paylaşıldı' }) %>
 
     <p class="center" style="margin-bottom:18px;">
       <a href="/" class="btn" style="display:inline-block; width:auto; padding:10px 22px;">+ Sen de paylaş</a>
