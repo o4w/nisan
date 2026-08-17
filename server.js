@@ -11,6 +11,7 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 const EVENT_NAME = process.env.EVENT_NAME || 'Anı Albümümüz';
+const EVENT_DATE = process.env.EVENT_DATE || '';
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const MAX_FILE_SIZE_MB = Number(process.env.MAX_FILE_SIZE_MB || 50);
 const MAX_FILES_PER_UPLOAD = Number(process.env.MAX_FILES_PER_UPLOAD || 10);
@@ -60,18 +61,18 @@ const upload = multer({
 
 // Misafir yükleme sayfası (QR kodun yönlendirdiği ana sayfa)
 app.get('/', (req, res) => {
-  res.render('index', { eventName: EVENT_NAME, maxFiles: MAX_FILES_PER_UPLOAD, maxSize: MAX_FILE_SIZE_MB });
+  res.render('index', { eventName: EVENT_NAME, eventDate: EVENT_DATE, maxFiles: MAX_FILES_PER_UPLOAD, maxSize: MAX_FILE_SIZE_MB });
 });
 
 // Yükleme işlemi
 app.post('/upload', (req, res) => {
   upload.array('photos', MAX_FILES_PER_UPLOAD)(req, res, async (err) => {
     if (err) {
-      return res.status(400).render('upload-result', { success: false, error: err.message, eventName: EVENT_NAME });
+      return res.status(400).render('upload-result', { success: false, error: err.message, eventName: EVENT_NAME, eventDate: EVENT_DATE });
     }
     const files = req.files || [];
     if (files.length === 0) {
-      return res.status(400).render('upload-result', { success: false, error: 'Lütfen en az bir fotoğraf veya video seçin.', eventName: EVENT_NAME });
+      return res.status(400).render('upload-result', { success: false, error: 'Lütfen en az bir fotoğraf veya video seçin.', eventName: EVENT_NAME, eventDate: EVENT_DATE });
     }
 
     const guestName = (req.body.guest_name || '').trim().slice(0, 80);
@@ -81,13 +82,14 @@ app.post('/upload', (req, res) => {
       for (const file of files) {
         await storage.saveUpload(file, { guestName, message, approved: !REQUIRE_MODERATION });
       }
-      res.render('upload-result', { success: true, count: files.length, eventName: EVENT_NAME, moderated: REQUIRE_MODERATION });
+      res.render('upload-result', { success: true, count: files.length, eventName: EVENT_NAME, eventDate: EVENT_DATE, moderated: REQUIRE_MODERATION });
     } catch (uploadErr) {
       console.error('Yukleme hatasi:', uploadErr);
       res.status(500).render('upload-result', {
         success: false,
         error: 'Yükleme sırasında bir sorun oluştu, lütfen tekrar deneyin.',
         eventName: EVENT_NAME,
+        eventDate: EVENT_DATE,
       });
     }
   });
@@ -97,7 +99,7 @@ app.post('/upload', (req, res) => {
 app.get('/galeri', async (req, res, next) => {
   try {
     const items = await storage.listApproved();
-    res.render('gallery', { items, eventName: EVENT_NAME });
+    res.render('gallery', { items, eventName: EVENT_NAME, eventDate: EVENT_DATE });
   } catch (e) {
     next(e);
   }
