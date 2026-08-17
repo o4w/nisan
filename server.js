@@ -105,6 +105,17 @@ app.get('/galeri', async (req, res, next) => {
   }
 });
 
+// Galerinin JSON hali - sayfa açıkken arka planda periyodik olarak buradan
+// yeni paylaşım olup olmadığı kontrol edilir (canlı/otomatik güncelleme için).
+app.get('/api/galeri', async (req, res, next) => {
+  try {
+    const items = await storage.listApproved();
+    res.json({ items });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // ---------- Admin (basit şifre korumalı) ----------
 const adminAuth = basicAuth({
   users: { [process.env.ADMIN_USER || 'admin']: process.env.ADMIN_PASS || 'change-me' },
