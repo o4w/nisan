@@ -1,177 +1,424 @@
-require('dotenv').config();
-
-const path = require('path');
-const express = require('express');
-const multer = require('multer');
-const basicAuth = require('express-basic-auth');
-
-const storage = require('./storage');
-
-const app = express();
-
-const PORT = process.env.PORT || 3000;
-const EVENT_NAME = process.env.EVENT_NAME || 'Anı Albümümüz';
-const EVENT_DATE = process.env.EVENT_DATE || '';
-const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
-const MAX_FILE_SIZE_MB = Number(process.env.MAX_FILE_SIZE_MB || 50);
-const MAX_FILES_PER_UPLOAD = Number(process.env.MAX_FILES_PER_UPLOAD || 10);
-const REQUIRE_MODERATION = String(process.env.REQUIRE_MODERATION || 'false') === 'true';
-
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.urlencoded({ extended: true }));
-
-// "local" sürücüde dosyalar bu sunucu tarafından /uploads altında servis edilir.
-// "r2" sürücüde dosyalar doğrudan Cloudflare R2'nin genel URL'sinden servis edilir, bu satıra gerek yok.
-if (storage.driver === 'local') {
-  app.use('/uploads', express.static(storage.UPLOAD_DIR));
+:root {
+  --bg: #fdf6f1;
+  --bg-soft: #faefe6;
+  --card: #fffefc;
+  --ink: #3a2b24;
+  --muted: #9c8378;
+  --accent: #c1785f;
+  --accent-dark: #a05f49;
+  --accent-soft: #f5e3da;
+  --gold: #c9a25c;
+  --border: #f0e0d3;
+  --danger: #b5453a;
+  --ok: #4c7a52;
+  --shadow: 0 10px 30px -12px rgba(90, 55, 40, 0.18);
+  --heading-font: 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
+  --body-font: 'Poppins', 'Segoe UI', sans-serif;
 }
 
-// ---------- Multer (dosya yükleme) ayarları ----------
-const ALLOWED_MIME = /^(image\/(jpeg|png|webp|heic|heif)|video\/(mp4|quicktime|webm))$/i;
+* { box-sizing: border-box; }
 
-// "r2" sürücüde dosyayı diske hiç yazmadan bellekte (buffer) tutup doğrudan Cloudflare'e yüklüyoruz.
-// "local" sürücüde ise doğrudan uploads/ klasörüne yazıyoruz (mevcut davranış).
-const multerStorage =
-  storage.driver === 'r2'
-    ? multer.memoryStorage()
-    : multer.diskStorage({
-        destination: (req, file, cb) => cb(null, storage.UPLOAD_DIR),
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname) || '';
-          const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-          cb(null, unique);
-        },
-      });
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--body-font);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(circle at 12% 8%, var(--bg-soft) 0%, transparent 45%),
+    radial-gradient(circle at 88% 92%, var(--bg-soft) 0%, transparent 40%),
+    var(--bg);
+  background-attachment: fixed;
+}
 
-const upload = multer({
-  storage: multerStorage,
-  limits: {
-    fileSize: MAX_FILE_SIZE_MB * 1024 * 1024,
-    files: MAX_FILES_PER_UPLOAD,
-  },
-  fileFilter: (req, file, cb) => {
-    if (ALLOWED_MIME.test(file.mimetype)) return cb(null, true);
-    cb(new Error('Desteklenmeyen dosya türü: ' + file.mimetype));
-  },
-});
+.wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 44px 20px 64px;
+  animation: fade-up .5s ease both;
+}
 
-// ---------- Sayfalar ----------
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-// Misafir yükleme sayfası (QR kodun yönlendirdiği ana sayfa)
-app.get('/', (req, res) => {
-  res.render('index', { eventName: EVENT_NAME, eventDate: EVENT_DATE, maxFiles: MAX_FILES_PER_UPLOAD, maxSize: MAX_FILE_SIZE_MB });
-});
+/* ---------- Hero / başlık alanı ---------- */
 
-// Yükleme işlemi
-app.post('/upload', (req, res) => {
-  upload.array('photos', MAX_FILES_PER_UPLOAD)(req, res, async (err) => {
-    if (err) {
-      return res.status(400).render('upload-result', { success: false, error: err.message, eventName: EVENT_NAME, eventDate: EVENT_DATE });
-    }
-    const files = req.files || [];
-    if (files.length === 0) {
-      return res.status(400).render('upload-result', { success: false, error: 'Lütfen en az bir fotoğraf veya video seçin.', eventName: EVENT_NAME, eventDate: EVENT_DATE });
-    }
+header.hero {
+  text-align: center;
+  margin-bottom: 32px;
+}
 
-    const guestName = (req.body.guest_name || '').trim().slice(0, 80);
-    const message = (req.body.message || '').trim().slice(0, 300);
+.ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--gold);
+}
+.ornament-line {
+  width: 42px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold));
+}
+.ornament-line:last-child { background: linear-gradient(90deg, var(--gold), transparent); }
+.ornament-mark { flex-shrink: 0; opacity: .85; }
 
-    try {
-      for (const file of files) {
-        await storage.saveUpload(file, { guestName, message, approved: !REQUIRE_MODERATION });
-      }
-      res.render('upload-result', { success: true, count: files.length, eventName: EVENT_NAME, eventDate: EVENT_DATE, moderated: REQUIRE_MODERATION });
-    } catch (uploadErr) {
-      console.error('Yukleme hatasi:', uploadErr);
-      res.status(500).render('upload-result', {
-        success: false,
-        error: 'Yükleme sırasında bir sorun oluştu, lütfen tekrar deneyin.',
-        eventName: EVENT_NAME,
-        eventDate: EVENT_DATE,
-      });
-    }
-  });
-});
+header.hero h1 {
+  font-family: var(--heading-font);
+  font-size: 2.4rem;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  margin: 0 0 6px;
+  color: var(--ink);
+  line-height: 1.15;
+}
 
-// Herkese açık galeri
-app.get('/galeri', async (req, res, next) => {
-  try {
-    const items = await storage.listApproved();
-    res.render('gallery', { items, eventName: EVENT_NAME, eventDate: EVENT_DATE });
-  } catch (e) {
-    next(e);
+.hero-date {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+.hero-subtitle {
+  color: var(--muted);
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+}
+
+.hero-compact { margin-bottom: 22px; }
+.admin-h1 {
+  font-family: var(--heading-font);
+  font-size: 1.7rem;
+  font-weight: 600;
+  font-style: italic;
+  margin: 0 0 6px;
+  color: var(--ink);
+}
+
+.card h2 {
+  font-family: var(--heading-font);
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-style: italic;
+  margin: 4px 0 8px;
+  color: var(--ink);
+}
+
+/* ---------- Kart ---------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px 24px;
+  box-shadow: var(--shadow);
+}
+
+label {
+  display: block;
+  font-family: var(--body-font);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 18px 0 7px;
+}
+
+input[type="text"],
+textarea {
+  width: 100%;
+  padding: 13px 15px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-family: var(--body-font);
+  font-size: 0.98rem;
+  background: #fffdfb;
+  color: var(--ink);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+input[type="text"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+textarea { resize: vertical; min-height: 70px; }
+
+.file-drop {
+  margin-top: 18px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  padding: 30px 16px;
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.file-drop:hover { border-color: var(--accent); background: var(--accent-soft); }
+.file-drop.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  border-style: solid;
+  transform: scale(1.015);
+}
+.file-drop input { display: none; }
+.file-drop .big { font-family: var(--heading-font); font-size: 1.3rem; font-style: italic; color: var(--ink); display:block; margin-bottom: 4px;}
+
+#preview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+#preview img, #preview video {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.preview-heic {
+  height: 90px;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .78rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+button, .btn {
+  display: inline-block;
+  width: 100%;
+  margin-top: 24px;
+  padding: 15px 18px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  font-family: var(--body-font);
+  font-weight: 600;
+  font-size: 0.98rem;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  box-shadow: 0 8px 20px -8px rgba(160, 95, 73, 0.55);
+  transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+}
+button:hover, .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -8px rgba(160, 95, 73, 0.65); }
+button:active, .btn:active { transform: translateY(0); }
+button:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--accent-dark);
+  border: 1px solid var(--accent);
+  box-shadow: none;
+}
+.btn-secondary:hover { background: var(--accent-soft); box-shadow: none; }
+
+.center { text-align: center; }
+.muted { color: var(--muted); font-size: .85rem; }
+
+.result-icon { font-size: 3rem; margin-bottom: 6px; }
+
+/* ---------- Galeri ---------- */
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.gallery-grid figure {
+  margin: 0;
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #eee;
+  aspect-ratio: 1 / 1;
+  box-shadow: 0 4px 14px -6px rgba(90, 55, 40, 0.25);
+  transition: transform .15s ease;
+}
+.gallery-grid figure:hover { transform: translateY(-2px); }
+.gallery-grid img, .gallery-grid video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-grid figcaption {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 5px 7px;
+  font-size: 0.65rem;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,.6));
+}
+
+/* ---------- Admin ---------- */
+
+.admin-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+}
+.admin-row img, .admin-row video { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; }
+.admin-row .meta { flex: 1; font-size: .85rem; }
+.admin-row form { display: inline; margin-right: 6px; }
+.badge {
+  display: inline-block;
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+.badge.hidden { background: #f6e2e0; color: var(--danger); }
+
+/* ---------- Galeri: giriş animasyonu + canlı güncelleme ---------- */
+
+.gallery-grid figure {
+  animation: item-in .5s cubic-bezier(.22,.61,.36,1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+@keyframes item-in {
+  from { opacity: 0; transform: translateY(14px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.gallery-grid figure.is-new {
+  animation: item-pop .6s cubic-bezier(.22,.61,.36,1) both;
+  box-shadow: 0 0 0 3px var(--gold), 0 4px 14px -6px rgba(90, 55, 40, 0.25);
+}
+@keyframes item-pop {
+  0% { opacity: 0; transform: scale(.7) translateY(-10px); }
+  60% { opacity: 1; transform: scale(1.04) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Not: görsellerin görünürlüğü JS'e bağlı DEĞİL - figürün kendisi zaten yukarıdaki
+   item-in animasyonuyla beliriyor. Görsel görünürlüğünü JS'in "yüklendi" olayına
+   bağlamak kırılgan bir tasarımdı (script herhangi bir sebeple çalışmazsa/gecikirse
+   görsel süresiz görünmez kalır, gerçekte bozuk olmasa bile "kırık" gibi görünür).
+   Bu yüzden görseller varsayılan olarak tam opak, JS olmadan da her zaman görünür. */
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .72rem;
+  color: var(--muted);
+  letter-spacing: .04em;
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 0 rgba(76,122,82,.5);
+  animation: live-pulse 2s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(76,122,82,.45); }
+  70% { box-shadow: 0 0 0 7px rgba(76,122,82,0); }
+  100% { box-shadow: 0 0 0 0 rgba(76,122,82,0); }
+}
+
+.new-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 20px);
+  background: var(--ink);
+  color: #fff;
+  padding: 11px 20px;
+  border-radius: 999px;
+  font-size: .85rem;
+  font-weight: 600;
+  box-shadow: 0 12px 28px -10px rgba(0,0,0,.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s ease, transform .3s ease;
+  z-index: 50;
+}
+.new-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ---------- Yükleme ilerleme çubuğu ---------- */
+
+.progress-wrap {
+  margin-top: 18px;
+  display: none;
+}
+.progress-wrap.show { display: block; }
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+  transition: width .2s ease;
+}
+.progress-fill.indeterminate {
+  width: 40% !important;
+  animation: progress-indeterminate 1.1s ease-in-out infinite;
+}
+@keyframes progress-indeterminate {
+  0% { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+.progress-label {
+  margin-top: 6px;
+  font-size: .78rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---------- Konfeti ---------- */
+
+.confetti-piece {
+  position: fixed;
+  top: -30px;
+  font-size: 1.4rem;
+  animation: confetti-fall linear forwards;
+  pointer-events: none;
+  z-index: 60;
+  will-change: transform;
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(360deg); opacity: .9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap, .gallery-grid figure, .gallery-grid figure.is-new, .live-dot, .confetti-piece {
+    animation: none !important;
   }
-});
-
-// Galerinin JSON hali - sayfa açıkken arka planda periyodik olarak buradan
-// yeni paylaşım olup olmadığı kontrol edilir (canlı/otomatik güncelleme için).
-app.get('/api/galeri', async (req, res, next) => {
-  try {
-    const items = await storage.listApproved();
-    res.json({ items });
-  } catch (e) {
-    next(e);
-  }
-});
-
-// ---------- Admin (basit şifre korumalı) ----------
-const adminAuth = basicAuth({
-  users: { [process.env.ADMIN_USER || 'admin']: process.env.ADMIN_PASS || 'change-me' },
-  challenge: true,
-  realm: 'Ani Albumu Admin',
-});
-
-app.get('/admin', adminAuth, async (req, res, next) => {
-  try {
-    const items = await storage.listAll();
-    res.render('admin', { items, eventName: EVENT_NAME, publicBaseUrl: PUBLIC_BASE_URL });
-  } catch (e) {
-    next(e);
-  }
-});
-
-app.post('/admin/onayla/:id', adminAuth, async (req, res, next) => {
-  try {
-    await storage.approve(req.params.id, req.body.resource_type);
-    res.redirect('/admin');
-  } catch (e) {
-    next(e);
-  }
-});
-
-app.post('/admin/gizle/:id', adminAuth, async (req, res, next) => {
-  try {
-    await storage.hide(req.params.id, req.body.resource_type);
-    res.redirect('/admin');
-  } catch (e) {
-    next(e);
-  }
-});
-
-app.post('/admin/sil/:id', adminAuth, async (req, res, next) => {
-  try {
-    await storage.remove(req.params.id, req.body.resource_type);
-    res.redirect('/admin');
-  } catch (e) {
-    next(e);
-  }
-});
-
-// Tüm albümü ZIP olarak indir (düğün çiftinin arşivlemesi için)
-app.get('/admin/tumunu-indir', adminAuth, async (req, res, next) => {
-  try {
-    await storage.streamAllForZip(res, `ani-albumu-${Date.now()}.zip`);
-  } catch (e) {
-    next(e);
-  }
-});
-
-app.listen(PORT, () => {
-  console.log(`Ani albumu calisiyor: http://localhost:${PORT}`);
-  console.log(`Depolama surucusu: ${storage.driver}`);
-  console.log(`Misafir yukleme sayfasi (QR bunu hedefleyecek): ${PUBLIC_BASE_URL}/`);
-  console.log(`Galeri: ${PUBLIC_BASE_URL}/galeri`);
-  console.log(`Admin: ${PUBLIC_BASE_URL}/admin`);
-});
+  .gallery-grid img { opacity: 1; transition: none; }
+}
