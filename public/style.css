@@ -313,11 +313,11 @@ button:disabled { opacity: .6; cursor: not-allowed; transform: none; }
   100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-.gallery-grid img {
-  opacity: 0;
-  transition: opacity .4s ease;
-}
-.gallery-grid img.is-loaded { opacity: 1; }
+/* Not: görsellerin görünürlüğü JS'e bağlı DEĞİL - figürün kendisi zaten yukarıdaki
+   item-in animasyonuyla beliriyor. Görsel görünürlüğünü JS'in "yüklendi" olayına
+   bağlamak kırılgan bir tasarımdı (script herhangi bir sebeple çalışmazsa/gecikirse
+   görsel süresiz görünmez kalır, gerçekte bozuk olmasa bile "kırık" gibi görünür).
+   Bu yüzden görseller varsayılan olarak tam opak, JS olmadan da her zaman görünür. */
 
 .live-indicator {
   display: inline-flex;
