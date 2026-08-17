@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
   <title><%= eventName %> — Anı Albümü</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="wrap">
-    <header class="hero">
-      <h1><%= eventName %></h1>
-      <p>Çektiğin fotoğraf ve videoları bizimle paylaş 💛</p>
-    </header>
+    <%- include('partials/hero', { eventName, eventDate, heroSubtitle: 'Çektiğin fotoğraf ve videoları bizimle paylaş' }) %>
 
     <div class="card">
       <form action="/upload" method="POST" enctype="multipart/form-data" id="uploadForm">
