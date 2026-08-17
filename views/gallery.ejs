@@ -53,16 +53,6 @@
       var known = new Set(Array.prototype.map.call(grid.querySelectorAll('figure'), function (f) { return f.dataset.id; }));
       var toastTimer = null;
 
-      function wireImage(img) {
-        if (img.complete && img.naturalWidth > 0) {
-          img.classList.add('is-loaded');
-        } else {
-          img.addEventListener('load', function () { img.classList.add('is-loaded'); }, { once: true });
-          img.addEventListener('error', function () { img.classList.add('is-loaded'); }, { once: true });
-        }
-      }
-      Array.prototype.forEach.call(grid.querySelectorAll('img'), wireImage);
-
       function buildFigure(item, isNew) {
         var figure = document.createElement('figure');
         figure.dataset.id = item.id;
@@ -83,7 +73,6 @@
           img.src = item.thumbnail;
           img.loading = 'lazy';
           img.alt = '';
-          wireImage(img);
           a.appendChild(img);
           figure.appendChild(a);
         }
